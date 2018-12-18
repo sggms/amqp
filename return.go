@@ -34,6 +34,23 @@ type Return struct {
 	AppId           string    // application use - creating application
 
 	Body []byte
+
+	// payload for ACK/NACK
+	ACKType     bool
+	ACK         bool
+	Multiple    bool
+	Requeue     bool
+	DeliveryTag uint64
+}
+
+func newAckReturn(isACK bool, deliveryTag uint64, multiple, requeue bool) *Return {
+	return &Return{
+		ACKType:     true,
+		ACK:         isACK,
+		DeliveryTag: deliveryTag,
+		Multiple:    multiple,
+		Requeue:     requeue,
+	}
 }
 
 func newReturn(msg basicReturn) *Return {

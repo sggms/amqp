@@ -297,7 +297,12 @@ func (ch *Channel) dispatch(msg message) {
 		}
 		ch.notifyM.RUnlock()
 		ch.consumers.cancel(m.ConsumerTag)
-
+		/*
+		   # When Will Published Messages Be Confirmed by the Broker?
+		   For unroutable messages, the broker will issue a confirm once the exchange verifies a message won't route to any queue
+		   (returns an empty list of queues). If the message is also published as mandatory, the basic.return is sent to the client
+		   before basic.ack. The same is true for negative acknowledgements (basic.nack).
+		*/
 	case *basicReturn:
 		ret := newReturn(*m)
 		ch.notifyM.RLock()
@@ -307,6 +312,14 @@ func (ch *Channel) dispatch(msg message) {
 		ch.notifyM.RUnlock()
 
 	case *basicAck:
+		// send the ACK also on the return channel, so that the sequence there is always preserved
+		ret := newAckReturn(true, m.DeliveryTag, m.Multiple, false)
+		ch.notifyM.RLock()
+		for _, c := range ch.returns {
+			c <- *ret
+		}
+		ch.notifyM.RUnlock()
+
 		if ch.confirming {
 			if m.Multiple {
 				ch.confirms.Multiple(Confirmation{m.DeliveryTag, true})
@@ -316,6 +329,14 @@ func (ch *Channel) dispatch(msg message) {
 		}
 
 	case *basicNack:
+		// send the NACK also on the return channel, so that the sequence there is always preserved
+		ret := newAckReturn(false, m.DeliveryTag, m.Multiple, m.Requeue)
+		ch.notifyM.RLock()
+		for _, c := range ch.returns {
+			c <- *ret
+		}
+		ch.notifyM.RUnlock()
+
 		if ch.confirming {
 			if m.Multiple {
 				ch.confirms.Multiple(Confirmation{m.DeliveryTag, false})
